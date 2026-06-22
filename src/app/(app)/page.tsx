@@ -4,9 +4,10 @@ import { useEffect, useState, useMemo } from 'react'
 import { RefreshCw, ChevronDown } from 'lucide-react'
 import { usePortfolio, computeSummary } from '@/hooks/usePortfolio'
 import { useQuotes } from '@/hooks/useQuotes'
-import { useHistory, type Period } from '@/hooks/useHistory'
+import { useHistory, type Period, type PriceHistory } from '@/hooks/useHistory'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { buildTWRRSeries, calculateTWRR, normalizeSeries, historyToSeries, downsample } from '@/lib/twrr'
+import { calculateXIRR } from '@/lib/calculations'
 import KpiCard from '@/components/KpiCard'
 import DonutChart from '@/components/DonutChart'
 import StrategyBarChart from '@/components/StrategyBarChart'
@@ -43,6 +44,16 @@ function getPeriodDates(period: Period): { start: Date; end: Date } {
   return { start, end }
 }
 
+function getMsciPrice(priceMap: Record<string, number>, date: string): number | null {
+  for (let i = 0; i <= 5; i++) {
+    const d = new Date(date)
+    d.setDate(d.getDate() - i)
+    const ds = d.toISOString().slice(0, 10)
+    if (priceMap[ds] != null) return priceMap[ds]
+  }
+  return null
+}
+
 export default function DashboardPage() {
   const { transactions, securities, cashflows, loading, error, reload } = usePortfolio()
   const { quotes, lastUpdated, loading: quotesLoading, fetchQuotes } = useQuotes()
@@ -50,6 +61,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<ReturnType<typeof computeSummary> | null>(null)
   const [period, setPeriod] = useState<Period>('1y')
   const [showPeriodMenu, setShowPeriodMenu] = useState(false)
+  const [msciFullHistory, setMsciFullHistory] = useState<PriceHistory>({})
 
   useEffect(() => {
     if (securities.length === 0) return
@@ -75,6 +87,48 @@ export default function DashboardPage() {
       setSummary(computeSummary(transactions, securities, cashflows, quotes))
     }
   }, [transactions, securities, cashflows, quotes, loading])
+
+  // Fetch MSCI World history once with 5y to cover all cashflow dates
+  useEffect(() => {
+    fetch(`/api/history?tickers=${MSCI_TICKER}&period=5y`)
+      .then(r => r.json())
+      .then(setMsciFullHistory)
+      .catch(() => {})
+  }, [])
+
+  // Hypothetical MSCI XIRR: simulate investing each Einzahlung into MSCI World
+  const msciXirr = useMemo(() => {
+    const prices = msciFullHistory[MSCI_TICKER] ?? []
+    if (prices.length === 0 || cashflows.length === 0) return null
+
+    const priceMap: Record<string, number> = {}
+    for (const p of prices) priceMap[p.date] = p.close
+
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const currentPrice = getMsciPrice(priceMap, todayStr)
+    if (!currentPrice) return null
+
+    let totalUnits = 0
+    const flows: { date: Date; amount: number }[] = []
+
+    for (const cf of cashflows) {
+      if (cf.category !== 'Einzahlung') continue
+      const price = getMsciPrice(priceMap, cf.date)
+      if (!price) continue
+      const amount = Math.abs(Number(cf.amount))
+      totalUnits += amount / price
+      flows.push({ date: new Date(cf.date), amount: -amount })
+    }
+
+    if (totalUnits === 0 || flows.length === 0) return null
+
+    const hypotheticalValue = totalUnits * currentPrice
+    flows.push({ date: new Date(), amount: hypotheticalValue })
+    flows.sort((a, b) => a.date.getTime() - b.date.getTime())
+
+    const raw = calculateXIRR(flows)
+    return raw != null ? raw * 100 : null
+  }, [msciFullHistory, cashflows])
 
   const handleRefresh = () => {
     const tickers = securities.map(s => s.gf_ticker ?? s.ticker).filter(Boolean)
@@ -274,6 +328,44 @@ export default function DashboardPage() {
           sub="Zeitgewichtete Rendite"
         />
       </div>
+
+      {/* MSCI Comparison */}
+      {(s?.xirr != null || msciXirr != null) && (
+        <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+            Vergleich: Mein Portfolio vs. MSCI World ETF
+          </h3>
+          <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+            XIRR p.a. auf Basis deiner tatsächlichen Einzahlungen — hypothetisch: selbe Beträge, selbe Zeitpunkte, aber in MSCI World angelegt
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-lg p-4" style={{ background: '#0d1117', border: '1px solid var(--border)' }}>
+              <div className="text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Mein Portfolio (XIRR p.a.)</div>
+              <div className="text-3xl font-bold" style={{ color: s?.xirr != null && s.xirr >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                {s?.xirr != null ? formatPercent(s.xirr) : '—'}
+              </div>
+            </div>
+            <div className="rounded-lg p-4" style={{ background: '#0d1117', border: '1px solid var(--border)' }}>
+              <div className="text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>MSCI World ETF (hypothetisch)</div>
+              <div className="text-3xl font-bold" style={{ color: msciXirr != null && msciXirr >= 0 ? '#3b82f6' : 'var(--accent-red)' }}>
+                {msciXirr != null ? formatPercent(msciXirr) : '—'}
+              </div>
+            </div>
+          </div>
+          {s?.xirr != null && msciXirr != null && (
+            <div className="mt-3 rounded-lg px-4 py-3 text-sm" style={{
+              background: s.xirr >= msciXirr ? 'rgba(132,204,22,0.08)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${s.xirr >= msciXirr ? 'rgba(132,204,22,0.2)' : 'rgba(239,68,68,0.2)'}`,
+            }}>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {s.xirr >= msciXirr
+                  ? `✓ Du schlägst den MSCI World um ${formatPercent(s.xirr - msciXirr)} p.a.`
+                  : `✗ Der MSCI World schlägt dich um ${formatPercent(msciXirr - s.xirr)} p.a. — eine reine ETF-Strategie wäre bisher besser gewesen.`}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Performance Chart */}
       <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
