@@ -18,6 +18,13 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Buchführung',
+    items: [
+      { href: '/transaktionen', label: 'Transaktionen', icon: ArrowLeftRight },
+      { href: '/cashflow', label: 'Cashflow', icon: ReceiptText },
+    ],
+  },
+  {
     label: 'Wertpapiere & Krypto',
     items: [
       { href: '/basis', label: 'Basis', icon: TrendingUp, sub: 'ETF Buy & Hold' },
@@ -40,13 +47,6 @@ const NAV_GROUPS = [
     label: 'Verbindlichkeiten',
     items: [
       { href: '/verbindlichkeiten', label: 'Verbindlichkeiten', icon: AlertTriangle },
-    ],
-  },
-  {
-    label: 'Buchführung',
-    items: [
-      { href: '/transaktionen', label: 'Transaktionen', icon: ArrowLeftRight },
-      { href: '/cashflow', label: 'Cashflow', icon: ReceiptText },
     ],
   },
 ]
