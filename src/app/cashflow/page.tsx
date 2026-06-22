@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Pencil, X } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Pencil, X, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import { formatCurrency, formatDate } from '@/lib/format'
+import ExportButton from '@/components/ExportButton'
 import type { Cashflow, CashflowCategory } from '@/lib/types'
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -18,11 +19,22 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const CATEGORIES: CashflowCategory[] = ['Einzahlung', 'Auszahlung', 'Zinsen', 'Dividende', 'Gebühr', 'Steuererstattung']
 
+type SortKey = 'date' | 'category' | 'amount' | 'description'
+type SortDir = 'asc' | 'desc'
+
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (col !== sortKey) return <ChevronsUpDown size={12} style={{ opacity: 0.3 }} />
+  return sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+}
+
 export default function CashflowPage() {
   const { cashflows, loading, reload } = usePortfolio()
   const [showForm, setShowForm] = useState(false)
   const [editingCf, setEditingCf] = useState<Cashflow | null>(null)
   const [filterCat, setFilterCat] = useState('alle')
+  const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('date')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     description: '',
@@ -35,12 +47,11 @@ export default function CashflowPage() {
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
-  const filtered = cashflows
-    .filter(cf => filterCat === 'alle' || cf.category === filterCat)
-    .slice().reverse()
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
 
-  // Amounts in DB: Einzahlung = positive, Auszahlung = negative (from Excel import)
-  // We display absolute values with color indicating direction
   const totals = cashflows.reduce((acc, cf) => {
     if (cf.category === 'Einzahlung') acc.einzahlungen += Math.abs(cf.amount)
     else if (cf.category === 'Auszahlung') acc.auszahlungen += Math.abs(cf.amount)
@@ -50,6 +61,31 @@ export default function CashflowPage() {
     else if (cf.category === 'Steuererstattung') acc.steuer += Math.abs(cf.amount)
     return acc
   }, { einzahlungen: 0, auszahlungen: 0, dividenden: 0, zinsen: 0, gebuehren: 0, steuer: 0 })
+
+  const filtered = useMemo(() => {
+    let rows = cashflows.filter(cf => {
+      if (filterCat !== 'alle' && cf.category !== filterCat) return false
+      if (search) {
+        const q = search.toLowerCase()
+        return (cf.description ?? '').toLowerCase().includes(q) || cf.category.toLowerCase().includes(q)
+      }
+      return true
+    })
+    rows = [...rows].sort((a, b) => {
+      let va: string | number = 0, vb: string | number = 0
+      if (sortKey === 'date') { va = a.date; vb = b.date }
+      else if (sortKey === 'category') { va = a.category; vb = b.category }
+      else if (sortKey === 'amount') { va = Math.abs(a.amount); vb = Math.abs(b.amount) }
+      else if (sortKey === 'description') { va = a.description ?? ''; vb = b.description ?? '' }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1
+      if (va > vb) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+    return rows
+  }, [cashflows, filterCat, search, sortKey, sortDir])
+
+  const exportHeaders = ['Datum', 'Beschreibung', 'Kategorie', 'Betrag']
+  const exportRows = filtered.map(cf => [cf.date, cf.description ?? '', cf.category, Math.abs(cf.amount)])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,11 +127,8 @@ export default function CashflowPage() {
     }
   }
 
-  const inputStyle = {
-    background: '#0d1117',
-    border: '1px solid var(--border)',
-    color: 'var(--text-primary)',
-  }
+  const inputStyle = { background: '#0d1117', border: '1px solid var(--border)', color: 'var(--text-primary)' }
+  const thClass = "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer select-none"
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -103,17 +136,18 @@ export default function CashflowPage() {
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Cashflow</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {cashflows.length} Buchungen
+            {filtered.length} von {cashflows.length} Buchungen
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold"
-          style={{ background: 'var(--accent-green)', color: '#0a0a0a' }}
-        >
-          <Plus size={16} />
-          Neue Buchung
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportButton filename="cashflow" headers={exportHeaders} rows={exportRows} />
+          <button onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: 'var(--accent-green)', color: '#0a0a0a' }}>
+            <Plus size={16} />
+            Neue Buchung
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -133,7 +167,6 @@ export default function CashflowPage() {
         ))}
       </div>
 
-      {/* Net */}
       <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
           Netto-Zufluss (Einzahlungen − Auszahlungen)
@@ -144,18 +177,24 @@ export default function CashflowPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
-        {['alle', ...CATEGORIES].map(cat => (
-          <button
-            key={cat}
-            onClick={() => setFilterCat(cat)}
+      <div className="flex gap-2 flex-wrap items-center">
+        <input
+          type="text"
+          placeholder="Beschreibung suchen…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-xs outline-none"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', width: 180 }}
+        />
+        <div className="w-px h-5" style={{ background: 'var(--border)' }} />
+        {(['alle', ...CATEGORIES] as const).map(cat => (
+          <button key={cat} onClick={() => setFilterCat(cat)}
             className="px-3 py-1.5 rounded-lg text-xs font-medium"
             style={{
               background: filterCat === cat ? 'rgba(132,204,22,0.15)' : 'var(--bg-card)',
               color: filterCat === cat ? 'var(--accent-green)' : 'var(--text-muted)',
               border: '1px solid var(--border)',
-            }}
-          >
+            }}>
             {cat === 'alle' ? 'Alle' : cat}
           </button>
         ))}
@@ -167,11 +206,15 @@ export default function CashflowPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Datum', 'Beschreibung', 'Kategorie', 'Betrag', ''].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                    {h}
+                {([['Datum', 'date'], ['Beschreibung', 'description'], ['Kategorie', 'category'], ['Betrag', 'amount']] as [string, SortKey][]).map(([label, key]) => (
+                  <th key={key} className={thClass} style={{ color: 'var(--text-muted)' }} onClick={() => toggleSort(key)}>
+                    <div className="flex items-center gap-1">
+                      {label}
+                      <SortIcon col={key} sortKey={sortKey} sortDir={sortDir} />
+                    </div>
                   </th>
                 ))}
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -207,13 +250,13 @@ export default function CashflowPage() {
         </div>
       </div>
 
-      {/* Form Modal */}
+      {/* New Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
           <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
               <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Neue Cashflow-Buchung</h2>
-              <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-muted)' }}>✕</button>
+              <button onClick={() => setShowForm(false)} style={{ color: 'var(--text-muted)' }}><X size={18} /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -256,22 +299,14 @@ export default function CashflowPage() {
         </div>
       )}
 
-      {/* Edit Modal */}
       {editingCf && (
-        <CashflowEditModal
-          cf={editingCf}
-          onClose={() => setEditingCf(null)}
-          onSave={handleEdit}
-          inputStyle={inputStyle}
-        />
+        <CashflowEditModal cf={editingCf} onClose={() => setEditingCf(null)} onSave={handleEdit} inputStyle={inputStyle} />
       )}
     </div>
   )
 }
 
-function CashflowEditModal({
-  cf, onClose, onSave, inputStyle,
-}: {
+function CashflowEditModal({ cf, onClose, onSave, inputStyle }: {
   cf: Cashflow
   onClose: () => void
   onSave: (e: React.FormEvent, cf: Cashflow, form: { date: string; description: string; amount: string; category: CashflowCategory; isin: string }) => void
