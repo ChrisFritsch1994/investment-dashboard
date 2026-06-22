@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import { formatCurrency, formatDate, formatNumber } from '@/lib/format'
 import TransactionForm from '@/components/TransactionForm'
@@ -27,6 +28,15 @@ export default function TransaktionenPage() {
   const { transactions, securities, loading, error, reload } = usePortfolio()
   const [showForm, setShowForm] = useState(false)
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const handleDelete = async (tx: Transaction) => {
+    if (!confirm(`Transaktion vom ${formatDate(tx.date)} (${tx.type} ${tx.security?.ticker ?? ''}) wirklich löschen?`)) return
+    setDeletingId(tx.id)
+    await supabase.from('transactions').delete().eq('id', tx.id)
+    setDeletingId(null)
+    reload()
+  }
   const [filterStrategy, setFilterStrategy] = useState<string>('alle')
   const [filterType, setFilterType] = useState<string>('alle')
   const [search, setSearch] = useState('')
@@ -210,11 +220,20 @@ export default function TransaktionenPage() {
                     {tx.stop_limit_price ? formatCurrency(tx.stop_limit_price) : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={() => setEditingTx(tx)}
-                      className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
-                      style={{ color: 'var(--text-muted)' }} title="Bearbeiten">
-                      <Pencil size={13} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setEditingTx(tx)}
+                        className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                        style={{ color: 'var(--text-muted)' }} title="Bearbeiten">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => handleDelete(tx)}
+                        disabled={deletingId === tx.id}
+                        className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors"
+                        style={{ color: deletingId === tx.id ? 'var(--text-muted)' : '#ef4444', opacity: deletingId === tx.id ? 0.5 : 1 }}
+                        title="Löschen">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

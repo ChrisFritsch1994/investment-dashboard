@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, X, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import { formatCurrency, formatDate } from '@/lib/format'
@@ -44,6 +44,15 @@ export default function CashflowPage() {
   })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const handleDelete = async (cf: Cashflow) => {
+    if (!confirm(`Cashflow-Eintrag vom ${formatDate(cf.date)} (${cf.category}) wirklich löschen?`)) return
+    setDeletingId(cf.id)
+    await supabase.from('cashflows').delete().eq('id', cf.id)
+    setDeletingId(null)
+    reload()
+  }
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -234,11 +243,20 @@ export default function CashflowPage() {
                     {formatCurrency(Math.abs(cf.amount))}
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={() => setEditingCf(cf)}
-                      className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
-                      style={{ color: 'var(--text-muted)' }} title="Bearbeiten">
-                      <Pencil size={13} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setEditingCf(cf)}
+                        className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                        style={{ color: 'var(--text-muted)' }} title="Bearbeiten">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => handleDelete(cf)}
+                        disabled={deletingId === cf.id}
+                        className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors"
+                        style={{ color: deletingId === cf.id ? 'var(--text-muted)' : '#ef4444', opacity: deletingId === cf.id ? 0.5 : 1 }}
+                        title="Löschen">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
