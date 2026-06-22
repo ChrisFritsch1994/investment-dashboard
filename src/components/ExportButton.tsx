@@ -42,14 +42,14 @@ export default function ExportButton({ filename, headers, rows }: Props) {
           className="absolute right-0 mt-1 w-40 rounded-lg shadow-xl z-50 overflow-hidden"
           style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
         >
-          {(['excel', 'csv', 'markdown'] as ExportFormat[]).map(f => (
+          {(['excel', 'pdf', 'markdown'] as ExportFormat[]).map(f => (
             <button
               key={f}
               onClick={() => handle(f)}
               className="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors"
               style={{ color: 'var(--text-secondary)' }}
             >
-              {f === 'excel' ? '📊 Excel (.csv)' : f === 'csv' ? '📄 CSV' : '📝 Markdown'}
+              {f === 'excel' ? '📊 Excel (.csv)' : f === 'pdf' ? '📄 PDF' : '📝 Markdown'}
             </button>
           ))}
         </div>
