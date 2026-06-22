@@ -46,8 +46,8 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
   }, [transactions, securities, quotes])
 
   const stratData = summary?.byStrategy[strategy]
-  const openPositions = summary?.positions.filter(p => p.shares > 0.0001 && p.security.strategy === strategy) ?? []
-  const closedPositions = summary?.positions.filter(p => p.shares <= 0.0001 && p.realizedPnL !== 0 && p.security.strategy === strategy) ?? []
+  const openPositions = summary?.positions.filter(p => p.shares > 0.0001) ?? []
+  const closedPositions = summary?.positions.filter(p => p.shares <= 0.0001 && p.realizedPnL !== 0) ?? []
   const pnlPct = stratData && stratData.invested > 0 ? ((stratData.value - stratData.invested) / stratData.invested) * 100 : 0
 
   const stats = filteredTx.length > 0
@@ -166,7 +166,7 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Wertpapier', 'Stück', 'Ø Kauf', 'Akt. Kurs', 'Investiert', 'Akt. Wert', 'G/V', 'G/V %'].map(h => (
+                  {['Wertpapier', 'Stück', 'Ø Kauf', 'Akt. Kurs', 'Investiert', 'Akt. Wert', 'Unreal. G/V', 'G/V %', 'Real. G/V'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -188,6 +188,9 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{p.currentValue != null ? formatCurrency(p.currentValue, 0) : '—'}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.unrealizedPnL != null ? formatCurrency(p.unrealizedPnL) : '—'}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.unrealizedPnLPct != null ? formatPercent(p.unrealizedPnLPct) : '—'}</td>
+                      <td className="px-4 py-3 font-medium" style={{ color: p.realizedPnL >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                        {p.realizedPnL !== 0 ? formatCurrency(p.realizedPnL) : '—'}
+                      </td>
                     </tr>
                   )
                 })}
