@@ -10,7 +10,8 @@ export function middleware(request: NextRequest) {
   }
 
   const session = request.cookies.get('auth_session')?.value
-  const expected = process.env.SESSION_SECRET
+  const pw = process.env.DASHBOARD_PASSWORD
+  const expected = pw ? Buffer.from(pw).toString('base64') : null
 
   if (!expected || session !== expected) {
     const loginUrl = new URL('/login', request.url)

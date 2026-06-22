@@ -4,9 +4,8 @@ export async function POST(request: NextRequest) {
   const { password } = await request.json()
 
   const correctPassword = process.env.DASHBOARD_PASSWORD
-  const sessionSecret = process.env.SESSION_SECRET
 
-  if (!correctPassword || !sessionSecret) {
+  if (!correctPassword) {
     return NextResponse.json({ error: 'Server nicht konfiguriert' }, { status: 500 })
   }
 
@@ -14,8 +13,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Falsches Passwort' }, { status: 401 })
   }
 
+  // Session-Token = Base64 des Passworts (kein separates SECRET nötig)
+  const sessionToken = Buffer.from(correctPassword).toString('base64')
+
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('auth_session', sessionSecret, {
+  response.cookies.set('auth_session', sessionToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
