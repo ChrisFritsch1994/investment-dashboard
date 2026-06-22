@@ -274,7 +274,7 @@ function CashflowEditModal({
 }: {
   cf: Cashflow
   onClose: () => void
-  onSave: (e: React.FormEvent, cf: Cashflow, form: { date: string; description: string; amount: string; category: string; isin: string }) => void
+  onSave: (e: React.FormEvent, cf: Cashflow, form: { date: string; description: string; amount: string; category: CashflowCategory; isin: string }) => void
   inputStyle: React.CSSProperties
 }) {
   const [form, setForm] = useState({
