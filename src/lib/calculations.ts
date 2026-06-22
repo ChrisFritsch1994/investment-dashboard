@@ -20,6 +20,8 @@ export function calculatePositions(
     shares: number
     totalCost: number
     realizedPnL: number
+    // shortProceeds tracks proceeds received from short sells (shares < 0)
+    shortProceeds: number
     limitPrice: number | null
     stopLimitPrice: number | null
   }>()
@@ -38,26 +40,54 @@ export function calculatePositions(
     if (!byKey.has(key)) {
       // Clone security with strategy overridden to the transaction's strategy
       const secWithStrategy: Security = { ...sec, strategy: tx.strategy as Security['strategy'] }
-      byKey.set(key, { security: secWithStrategy, strategy: tx.strategy, shares: 0, totalCost: 0, realizedPnL: 0, limitPrice: null, stopLimitPrice: null })
+      byKey.set(key, { security: secWithStrategy, strategy: tx.strategy, shares: 0, totalCost: 0, realizedPnL: 0, shortProceeds: 0, limitPrice: null, stopLimitPrice: null })
     }
     const pos = byKey.get(key)!
 
     if (tx.type === 'Kauf') {
-      pos.shares += tx.shares
-      pos.totalCost += tx.shares * tx.price + tx.fees
-      // Track limit/stop from most recent Kauf
-      pos.limitPrice = tx.limit_price ?? null
-      pos.stopLimitPrice = tx.stop_limit_price ?? null
+      if (pos.shares < -0.0001) {
+        // Covering a short position: buy to close short
+        const sharesToCover = Math.min(tx.shares, -pos.shares)
+        const feeForCover = tx.shares > 0 ? tx.fees * (sharesToCover / tx.shares) : 0
+        const avgShortProceeds = -pos.shares > 0 ? pos.shortProceeds / (-pos.shares) : 0
+        const coverCost = sharesToCover * tx.price + feeForCover
+        pos.realizedPnL += avgShortProceeds * sharesToCover - coverCost
+        pos.shortProceeds -= avgShortProceeds * sharesToCover
+        pos.shares += sharesToCover
+        // If more shares bought than needed to cover, open a long position with the remainder
+        const remainingBuy = tx.shares - sharesToCover
+        if (remainingBuy > 0.0001) {
+          const remainingFees = tx.fees * (remainingBuy / tx.shares)
+          pos.shares += remainingBuy
+          pos.totalCost += remainingBuy * tx.price + remainingFees
+        }
+        pos.limitPrice = tx.limit_price ?? null
+        pos.stopLimitPrice = tx.stop_limit_price ?? null
+      } else {
+        pos.shares += tx.shares
+        pos.totalCost += tx.shares * tx.price + tx.fees
+        // Track limit/stop from most recent Kauf
+        pos.limitPrice = tx.limit_price ?? null
+        pos.stopLimitPrice = tx.stop_limit_price ?? null
+      }
     } else if (tx.type === 'Verkauf') {
-      const avgCost = pos.shares > 0 ? pos.totalCost / pos.shares : 0
-      const proceeds = tx.shares * tx.price - tx.fees - tx.taxes
-      const costBasis = tx.shares * avgCost
-      pos.realizedPnL += proceeds - costBasis
-      pos.shares -= tx.shares
-      pos.totalCost -= tx.shares * avgCost
-      if (pos.shares < 0.0001) {
-        pos.shares = 0
-        pos.totalCost = 0
+      if (pos.shares >= 0.0001) {
+        // Normal long sell
+        const avgCost = pos.totalCost / pos.shares
+        const proceeds = tx.shares * tx.price - tx.fees - tx.taxes
+        const costBasis = tx.shares * avgCost
+        pos.realizedPnL += proceeds - costBasis
+        pos.shares -= tx.shares
+        pos.totalCost -= tx.shares * avgCost
+        if (pos.shares < 0.0001) {
+          pos.shares = 0
+          pos.totalCost = 0
+        }
+      } else {
+        // Opening or adding to short position (Leerverkauf)
+        const proceeds = tx.shares * tx.price - tx.fees - tx.taxes
+        pos.shortProceeds += proceeds
+        pos.shares -= tx.shares  // becomes (more) negative
       }
     }
   }
