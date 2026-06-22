@@ -287,17 +287,10 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Quelle</label>
-              <input type="text" className={inputClass} style={inputStyle} placeholder="z.B. Trade Republic"
-                value={form.source} onChange={e => set('source', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Notiz</label>
-              <input type="text" className={inputClass} style={inputStyle}
-                value={form.notes} onChange={e => set('notes', e.target.value)} />
-            </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Notiz</label>
+            <input type="text" className={inputClass} style={inputStyle}
+              value={form.notes} onChange={e => set('notes', e.target.value)} />
           </div>
 
           {error && (

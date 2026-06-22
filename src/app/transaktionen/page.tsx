@@ -68,11 +68,11 @@ export default function TransaktionenPage() {
     return rows
   }, [transactions, filterStrategy, filterType, search, sortKey, sortDir])
 
-  const exportHeaders = ['Datum', 'Typ', 'Ticker', 'Name', 'Strategie', 'Stück', 'Preis', 'Gebühren', 'Steuern', 'Betrag', 'Limit', 'Stop-Limit', 'Quelle', 'Notiz']
+  const exportHeaders = ['Datum', 'Typ', 'Ticker', 'Name', 'Strategie', 'Stück', 'Preis', 'Gebühren', 'Steuern', 'Betrag', 'Limit', 'Stop-Limit', 'Notiz']
   const exportRows = filtered.map(tx => [
     tx.date, tx.type, tx.security?.ticker ?? '', tx.security?.name ?? '',
     tx.strategy, tx.shares, tx.price, tx.fees, tx.taxes, tx.amount,
-    tx.limit_price ?? '', tx.stop_limit_price ?? '', tx.source ?? '', tx.notes ?? '',
+    tx.limit_price ?? '', tx.stop_limit_price ?? '', tx.notes ?? '',
   ])
 
   if (loading) return (
@@ -165,7 +165,7 @@ export default function TransaktionenPage() {
                     </div>
                   </th>
                 ))}
-                {['Limit', 'Stop-Limit', 'Quelle', ''].map(h => (
+                {['Limit', 'Stop-Limit', ''].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider"
                     style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
@@ -209,7 +209,6 @@ export default function TransaktionenPage() {
                   <td className="px-4 py-3 text-xs" style={{ color: tx.stop_limit_price ? '#ef4444' : 'var(--text-muted)' }}>
                     {tx.stop_limit_price ? formatCurrency(tx.stop_limit_price) : '—'}
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>{tx.source ?? '—'}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => setEditingTx(tx)}
                       className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
