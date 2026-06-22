@@ -13,11 +13,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Falsches Passwort' }, { status: 401 })
   }
 
-  // Session-Token = Base64 des Passworts (kein separates SECRET nötig)
-  const sessionToken = Buffer.from(correctPassword).toString('base64')
-
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('auth_session', sessionToken, {
+  response.cookies.set('auth_session', correctPassword, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
