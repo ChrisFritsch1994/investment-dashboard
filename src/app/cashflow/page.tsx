@@ -171,8 +171,8 @@ export default function CashflowPage() {
         <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
           Netto-Zufluss (Einzahlungen − Auszahlungen)
         </span>
-        <span className="text-xl font-bold" style={{ color: (totals.einzahlungen - totals.auszahlungen) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-          {formatCurrency(totals.einzahlungen - totals.auszahlungen, 0)}
+        <span className="text-xl font-bold" style={{ color: (cashflows.reduce((s, cf) => s + cf.amount, 0)) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+          {formatCurrency(cashflows.reduce((s, cf) => s + cf.amount, 0), 0)}
         </span>
       </div>
 
