@@ -136,9 +136,10 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70">
+      <div className="flex min-h-full items-center justify-center p-4 pt-16 sm:pt-4">
       <div
-        className="w-full max-w-2xl rounded-2xl shadow-2xl my-4"
+        className="w-full max-w-2xl rounded-2xl shadow-2xl"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -312,6 +313,7 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   )

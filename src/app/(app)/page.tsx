@@ -6,7 +6,7 @@ import { usePortfolio, computeSummary } from '@/hooks/usePortfolio'
 import { useQuotes } from '@/hooks/useQuotes'
 import { useHistory, type Period } from '@/hooks/useHistory'
 import { formatCurrency, formatPercent } from '@/lib/format'
-import { buildPortfolioSeries, calculateTWRR, normalizeSeries, historyToSeries, downsample } from '@/lib/twrr'
+import { buildTWRRSeries, calculateTWRR, normalizeSeries, historyToSeries, downsample } from '@/lib/twrr'
 import KpiCard from '@/components/KpiCard'
 import DonutChart from '@/components/DonutChart'
 import StrategyBarChart from '@/components/StrategyBarChart'
@@ -89,7 +89,7 @@ export default function DashboardPage() {
 
     const { start, end } = getPeriodDates(period)
 
-    const rawPortfolio = buildPortfolioSeries(transactions, securities, history, start, end)
+    const rawPortfolio = buildTWRRSeries(transactions, securities, history, start, end)
     const rawMsci = historyToSeries(history[MSCI_TICKER] ?? [], start, end)
 
     const twrrValue = calculateTWRR(transactions, securities, history, start, end)

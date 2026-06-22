@@ -252,7 +252,8 @@ export default function CashflowPage() {
 
       {/* New Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70">
+          <div className="flex min-h-full items-center justify-center p-4 pt-16 sm:pt-4">
           <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
               <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Neue Cashflow-Buchung</h2>
@@ -296,6 +297,7 @@ export default function CashflowPage() {
               </div>
             </form>
           </div>
+          </div>
         </div>
       )}
 
@@ -322,7 +324,8 @@ function CashflowEditModal({ cf, onClose, onSave, inputStyle }: {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70">
+      <div className="flex min-h-full items-center justify-center p-4 pt-16 sm:pt-4">
       <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
           <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Buchung bearbeiten</h2>
@@ -371,6 +374,7 @@ function CashflowEditModal({ cf, onClose, onSave, inputStyle }: {
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   )

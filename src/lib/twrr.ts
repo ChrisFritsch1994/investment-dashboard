@@ -185,6 +185,77 @@ export function calculateTWRR(
   return isFinite(result) ? result : null
 }
 
+// Build a time-weighted return series (Basis 100), excluding the effect of
+// new cash flows (Käufe/Verkäufe). Each day's return = price change of
+// holdings BEFORE applying that day's transactions.
+export function buildTWRRSeries(
+  transactions: Transaction[],
+  securities: Security[],
+  history: PriceHistory,
+  startDate: Date,
+  endDate: Date,
+): { date: string; value: number }[] {
+  const secById = new Map(securities.map(s => [s.id, s]))
+  const priceMaps = buildPriceMaps(history)
+  const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date))
+  const startStr = startDate.toISOString().slice(0, 10)
+  const endStr = endDate.toISOString().slice(0, 10)
+
+  // Build holdings from transactions BEFORE the period
+  const holdings = new Map<string, Holding>()
+  let txIdx = 0
+  while (txIdx < sorted.length && sorted[txIdx].date < startStr) {
+    const tx = sorted[txIdx]
+    const sec = tx.security_id ? secById.get(tx.security_id) : null
+    if (sec) applyTransaction(holdings, sec.gf_ticker ?? sec.ticker, tx.type, tx.shares, tx.price)
+    txIdx++
+  }
+
+  const result: { date: string; value: number }[] = []
+  let twrrValue = 100
+  let prevValue: number | null = null  // portfolio value AFTER previous day's transactions
+
+  const cur = new Date(startDate)
+  while (cur.toISOString().slice(0, 10) <= endStr) {
+    const dateStr = cur.toISOString().slice(0, 10)
+
+    const hasReal = [...holdings.entries()].some(([ticker, h]) =>
+      h.shares > 0.0001 && priceMaps[ticker] != null && getPrice(priceMaps[ticker], dateStr) != null
+    )
+
+    // Price BEFORE today's transactions → pure market movement
+    const valueBeforeTx = hasReal ? pricedValue(holdings, priceMaps, dateStr) : 0
+
+    // Compound the market return (excludes new cash flows)
+    if (prevValue !== null && prevValue > 0 && valueBeforeTx > 0) {
+      twrrValue *= valueBeforeTx / prevValue
+    }
+
+    // Apply today's transactions
+    while (txIdx < sorted.length && sorted[txIdx].date === dateStr) {
+      const tx = sorted[txIdx]
+      const sec = tx.security_id ? secById.get(tx.security_id) : null
+      if (sec) applyTransaction(holdings, sec.gf_ticker ?? sec.ticker, tx.type, tx.shares, tx.price)
+      txIdx++
+    }
+
+    // Value AFTER transactions = base for next day's return calculation
+    const hasRealAfter = [...holdings.entries()].some(([ticker, h]) =>
+      h.shares > 0.0001 && priceMaps[ticker] != null && getPrice(priceMaps[ticker], dateStr) != null
+    )
+    const valueAfterTx = hasRealAfter ? pricedValue(holdings, priceMaps, dateStr) : 0
+
+    if (valueAfterTx > 0) {
+      result.push({ date: dateStr, value: Math.round(twrrValue * 100) / 100 })
+      prevValue = valueAfterTx
+    }
+
+    cur.setDate(cur.getDate() + 1)
+  }
+
+  return result
+}
+
 // Normalize a value series so the first point = 100
 export function normalizeSeries(series: { date: string; value: number }[]): { date: string; value: number }[] {
   if (series.length === 0) return []
