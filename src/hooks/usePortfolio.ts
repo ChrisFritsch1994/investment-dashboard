@@ -52,17 +52,23 @@ export function computeSummary(
   const unrealizedPnL = currentValue - totalInvested
   const realizedPnL = positions.reduce((s, p) => s + p.realizedPnL, 0)
   const totalReturn = unrealizedPnL + realizedPnL
-  const totalReturnPct = totalInvested > 0 ? (totalReturn / totalInvested) * 100 : 0
+  // Denominator: Summe aller jemals investierten Kaufbeträge (wie Excel: Gesamtrendite = G/V / Summe Käufe)
+  const totalEverInvested = transactions
+    .filter(tx => tx.type === 'Kauf')
+    .reduce((s, tx) => s + tx.amount, 0)
+  const totalReturnPct = totalEverInvested > 0 ? (totalReturn / totalEverInvested) * 100 : 0
 
   // XIRR — berechnet auf Basis der tatsächlichen Transaktionen (Käufe/Verkäufe)
   // Kauf = negativer Cashflow (Kapital wird eingesetzt)
-  // Verkauf = positiver Cashflow (Kapital kehrt zurück)
+  // Verkauf = positiver Cashflow (tatsächlich erhaltenes Geld = shares*price - fees - taxes)
   // Aktueller Depotwert = terminaler positiver Cashflow
   let xirr: number | null = null
   if (currentValue > 0 && transactions.length > 0) {
     const txFlows: { date: Date; amount: number }[] = transactions.map(tx => ({
       date: new Date(tx.date),
-      amount: tx.type === 'Kauf' ? -tx.amount : tx.amount,
+      amount: tx.type === 'Kauf'
+        ? -tx.amount
+        : tx.shares * tx.price - tx.fees - tx.taxes,
     }))
     txFlows.push({ date: new Date(), amount: currentValue })
     txFlows.sort((a, b) => a.date.getTime() - b.date.getTime())
