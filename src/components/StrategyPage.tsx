@@ -47,7 +47,7 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
 
   const stratData = summary?.byStrategy[strategy]
   const openPositions = summary?.positions.filter(p => p.shares > 0.0001) ?? []
-  const closedPositions = summary?.positions.filter(p => p.shares <= 0.0001 && p.realizedPnL !== 0) ?? []
+  const realizedPositions = summary?.positions.filter(p => p.realizedPnL !== 0) ?? []
   const pnlPct = stratData && stratData.invested > 0 ? ((stratData.value - stratData.invested) / stratData.invested) * 100 : 0
 
   const stats = filteredTx.length > 0
@@ -166,7 +166,7 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Wertpapier', 'Stück', 'Ø Kauf', 'Akt. Kurs', 'Investiert', 'Akt. Wert', 'Unreal. G/V', 'G/V %', 'Real. G/V'].map(h => (
+                  {['Wertpapier', 'Stück', 'Ø Kauf', 'Akt. Kurs', 'Investiert', 'Akt. Wert', 'Unreal. G/V', 'G/V %'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -188,9 +188,6 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{p.currentValue != null ? formatCurrency(p.currentValue, 0) : '—'}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.unrealizedPnL != null ? formatCurrency(p.unrealizedPnL) : '—'}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.unrealizedPnLPct != null ? formatPercent(p.unrealizedPnLPct) : '—'}</td>
-                      <td className="px-4 py-3 font-medium" style={{ color: p.realizedPnL >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                        {p.realizedPnL !== 0 ? formatCurrency(p.realizedPnL) : '—'}
-                      </td>
                     </tr>
                   )
                 })}
@@ -200,34 +197,44 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
         </div>
       )}
 
-      {/* Closed positions */}
-      {closedPositions.length > 0 && (
+      {/* Realized G/V — all positions with any realized P&L (partial or fully closed) */}
+      {realizedPositions.length > 0 && (
         <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Geschlossene Positionen</h3>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Realisierter G/V</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Wertpapier', 'Real. G/V', 'G/V %'].map(h => (
+                  {['Wertpapier', 'Status', 'Real. G/V', 'G/V %'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {closedPositions.map((p, i) => {
-                  // Reconstruct total cost from transactions to compute G/V %
-                  const txForPos = filteredTx.filter(tx => tx.security_id === p.security.id && tx.type === 'Kauf')
-                  const totalCost = txForPos.reduce((s, tx) => s + tx.amount, 0)
+                {realizedPositions.map((p, i) => {
+                  const isClosed = p.shares <= 0.0001
+                  const txKauf = filteredTx.filter(tx => tx.security_id === p.security.id && tx.type === 'Kauf')
+                  const totalCost = txKauf.reduce((s, tx) => s + tx.amount, 0)
                   const pnlPct = totalCost > 0 ? (p.realizedPnL / totalCost) * 100 : null
                   const isPos = p.realizedPnL >= 0
                   return (
-                    <tr key={`${p.security.id}-closed`} style={{ borderBottom: i < closedPositions.length - 1 ? '1px solid #111827' : 'none' }}
+                    <tr key={`${p.security.id}-realized`}
+                      style={{ borderBottom: i < realizedPositions.length - 1 ? '1px solid #111827' : 'none' }}
                       className="hover:bg-white/[0.02]">
                       <td className="px-4 py-3">
                         <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.security.ticker}</div>
                         <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.security.name}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full"
+                          style={{
+                            background: isClosed ? 'rgba(107,114,128,0.15)' : 'rgba(59,130,246,0.15)',
+                            color: isClosed ? '#9ca3af' : '#3b82f6',
+                          }}>
+                          {isClosed ? 'Geschlossen' : 'Teilverkauf'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>
                         {formatCurrency(p.realizedPnL)}
