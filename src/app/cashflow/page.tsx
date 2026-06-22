@@ -281,7 +281,7 @@ function CashflowEditModal({
     date: cf.date,
     description: cf.description ?? '',
     amount: Math.abs(cf.amount).toString(),
-    category: cf.category as string,
+    category: cf.category as CashflowCategory,
     isin: cf.isin ?? '',
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
