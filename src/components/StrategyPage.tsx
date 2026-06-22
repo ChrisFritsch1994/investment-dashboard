@@ -47,6 +47,7 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
 
   const stratData = summary?.byStrategy[strategy]
   const openPositions = summary?.positions.filter(p => p.shares > 0.0001 && p.security.strategy === strategy) ?? []
+  const closedPositions = summary?.positions.filter(p => p.shares <= 0.0001 && p.realizedPnL !== 0 && p.security.strategy === strategy) ?? []
   const pnlPct = stratData && stratData.invested > 0 ? ((stratData.value - stratData.invested) / stratData.invested) * 100 : 0
 
   const stats = filteredTx.length > 0
@@ -187,6 +188,50 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{p.currentValue != null ? formatCurrency(p.currentValue, 0) : '—'}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.unrealizedPnL != null ? formatCurrency(p.unrealizedPnL) : '—'}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>{p.unrealizedPnLPct != null ? formatPercent(p.unrealizedPnLPct) : '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Closed positions */}
+      {closedPositions.length > 0 && (
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Geschlossene Positionen</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  {['Wertpapier', 'Real. G/V', 'G/V %'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {closedPositions.map((p, i) => {
+                  // Reconstruct total cost from transactions to compute G/V %
+                  const txForPos = filteredTx.filter(tx => tx.security_id === p.security.id && tx.type === 'Kauf')
+                  const totalCost = txForPos.reduce((s, tx) => s + tx.amount, 0)
+                  const pnlPct = totalCost > 0 ? (p.realizedPnL / totalCost) * 100 : null
+                  const isPos = p.realizedPnL >= 0
+                  return (
+                    <tr key={`${p.security.id}-closed`} style={{ borderBottom: i < closedPositions.length - 1 ? '1px solid #111827' : 'none' }}
+                      className="hover:bg-white/[0.02]">
+                      <td className="px-4 py-3">
+                        <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{p.security.ticker}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.security.name}</div>
+                      </td>
+                      <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                        {formatCurrency(p.realizedPnL)}
+                      </td>
+                      <td className="px-4 py-3 font-medium" style={{ color: isPos ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                        {pnlPct != null ? formatPercent(pnlPct) : '—'}
+                      </td>
                     </tr>
                   )
                 })}

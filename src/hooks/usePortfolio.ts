@@ -58,17 +58,33 @@ export function computeSummary(
     .reduce((s, tx) => s + tx.amount, 0)
   const totalReturnPct = totalEverInvested > 0 ? (totalReturn / totalEverInvested) * 100 : 0
 
-  // XIRR — Einzahlungs-basiert (wie Excel): Einzahlungen als neg. Cashflow,
-  // Auszahlungen als pos. Cashflow, aktueller Depotwert als terminaler Zufluss
+  // XIRR — Einzahlungs-basiert wenn Cashflow-Daten vorhanden, sonst Transaction-Fallback
   let xirr: number | null = null
-  if (currentValue > 0 && cashflows.length > 0) {
-    const xirrFlows = buildXIRRCashflows(
-      cashflows.map(cf => ({ date: cf.date, amount: Number(cf.amount), category: cf.category })),
-      currentValue
-    )
-    if (xirrFlows.length >= 2) {
-      const raw = calculateXIRR(xirrFlows)
-      xirr = raw != null ? raw * 100 : null
+  if (currentValue > 0) {
+    // Primary: Einzahlungen/Auszahlungen aus der Cashflow-Tabelle
+    if (cashflows.length > 0) {
+      const xirrFlows = buildXIRRCashflows(
+        cashflows.map(cf => ({ date: cf.date, amount: Number(cf.amount), category: cf.category })),
+        currentValue
+      )
+      if (xirrFlows.length >= 2) {
+        const raw = calculateXIRR(xirrFlows)
+        xirr = raw != null ? raw * 100 : null
+      }
+    }
+    // Fallback: Käufe als Abflüsse, Verkäufe als Zuflüsse + aktueller Depotwert
+    if (xirr === null && transactions.length > 0) {
+      const txFlows: { date: Date; amount: number }[] = transactions
+        .map(tx => ({
+          date: new Date(tx.date),
+          amount: tx.type === 'Kauf' ? -tx.amount : tx.shares * tx.price - tx.fees - tx.taxes,
+        }))
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+      txFlows.push({ date: new Date(), amount: currentValue })
+      if (txFlows.length >= 2) {
+        const raw = calculateXIRR(txFlows)
+        xirr = raw != null ? raw * 100 : null
+      }
     }
   }
 
