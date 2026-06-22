@@ -94,29 +94,29 @@ export default function TransaktionenPage() {
           <ExportButton filename="transaktionen" headers={exportHeaders} rows={exportRows} />
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold min-h-[40px]"
             style={{ background: 'var(--accent-green)', color: '#0a0a0a' }}
           >
             <Plus size={16} />
-            Neue Transaktion
+            <span className="hidden sm:inline">Neue Transaktion</span>
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-center">
+      <div className="flex gap-3 items-center overflow-x-auto pb-1 scrollbar-hide">
         <input
           type="text"
           placeholder="Ticker / Name suchen…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="px-3 py-1.5 rounded-lg text-xs outline-none"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', width: 180 }}
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', minWidth: 140, flexShrink: 0 }}
         />
         <div className="w-px h-5" style={{ background: 'var(--border)' }} />
         {(['alle', 'Basis', 'Saisonalitäten', 'Aktien-Trading', 'Krypto'] as const).map(s => (
           <button key={s} onClick={() => setFilterStrategy(s)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0"
             style={{
               background: filterStrategy === s ? 'rgba(132,204,22,0.15)' : 'var(--bg-card)',
               color: filterStrategy === s ? 'var(--accent-green)' : 'var(--text-muted)',
@@ -128,7 +128,7 @@ export default function TransaktionenPage() {
         <div className="w-px h-5" style={{ background: 'var(--border)' }} />
         {(['alle', 'Kauf', 'Verkauf'] as const).map(t => (
           <button key={t} onClick={() => setFilterType(t)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
             style={{
               background: filterType === t ? 'rgba(132,204,22,0.15)' : 'var(--bg-card)',
               color: filterType === t ? 'var(--accent-green)' : 'var(--text-muted)',

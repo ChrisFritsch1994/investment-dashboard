@@ -211,11 +211,12 @@ export default function DashboardPage() {
 
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
+            className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium min-h-[40px]"
             style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+            title="Kurse aktualisieren"
           >
             <RefreshCw size={14} className={quotesLoading ? 'animate-spin' : ''} />
-            Aktualisieren
+            <span className="hidden sm:inline">Aktualisieren</span>
           </button>
         </div>
       </div>
@@ -226,7 +227,7 @@ export default function DashboardPage() {
           Aktueller Depotwert
         </div>
         <div className="flex items-end gap-4 flex-wrap">
-          <div className="text-5xl font-bold" style={{ color: 'var(--text-primary)' }}>
+          <div className="text-3xl sm:text-5xl font-bold" style={{ color: 'var(--text-primary)' }}>
             {formatCurrency(s?.currentValue ?? 0, 0)}
           </div>
           <div

@@ -29,3 +29,6 @@ body {
 
 .positive { color: var(--accent-green); }
 .negative { color: var(--accent-red); }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

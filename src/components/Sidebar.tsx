@@ -57,13 +57,23 @@ export default function Sidebar() {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed top-4 left-4 z-50 p-2 rounded-lg lg:hidden"
-        style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+      {/* Mobile top bar */}
+      <div
+        className="fixed top-0 left-0 right-0 z-40 h-14 flex items-center px-4 lg:hidden"
+        style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border)' }}
       >
-        <Menu size={20} />
-      </button>
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center justify-center w-10 h-10 rounded-lg"
+          style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+          aria-label="Menü öffnen"
+        >
+          <Menu size={20} />
+        </button>
+        <span className="ml-3 text-sm font-semibold" style={{ color: 'var(--accent-green)' }}>
+          PORTFOLIO
+        </span>
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setOpen(false)} />
