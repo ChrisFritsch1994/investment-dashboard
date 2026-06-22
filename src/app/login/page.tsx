@@ -1,11 +1,9 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { Lock, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
@@ -22,14 +20,16 @@ export default function LoginPage() {
         body: JSON.stringify({ password }),
       })
       if (res.ok) {
-        router.push('/')
-        router.refresh()
+        window.location.href = '/'
       } else {
-        setError('Falsches Passwort')
+        const data = await res.json().catch(() => ({}))
+        setError(data.error === 'Server nicht konfiguriert'
+          ? 'Server-Konfigurationsfehler – Env-Var fehlt'
+          : 'Falsches Passwort')
+        setLoading(false)
       }
     } catch {
       setError('Verbindungsfehler')
-    } finally {
       setLoading(false)
     }
   }
