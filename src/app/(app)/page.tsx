@@ -6,7 +6,7 @@ import { usePortfolio, computeSummary } from '@/hooks/usePortfolio'
 import { useQuotes } from '@/hooks/useQuotes'
 import { useHistory, type Period, type PriceHistory } from '@/hooks/useHistory'
 import { formatCurrency, formatPercent } from '@/lib/format'
-import { buildTWRRSeries, calculateTWRR, normalizeSeries, historyToSeries, downsample } from '@/lib/twrr'
+import { buildTWRRSeries, buildPortfolioSeries, calculateTWRR, normalizeSeries, historyToSeries, downsample } from '@/lib/twrr'
 import { calculateXIRR, buildXIRRCashflows } from '@/lib/calculations'
 import KpiCard from '@/components/KpiCard'
 import DonutChart from '@/components/DonutChart'
@@ -138,42 +138,60 @@ export default function DashboardPage() {
     return raw != null ? raw * 100 : null
   }, [msciFullHistory, cashflows])
 
-  // Period-specific XIRR: filter cashflows to selected period, use current portfolio value as terminal
+  // Period-specific XIRR using correct methodology:
+  // 1. Portfolio value at period start as opening cost (negative cashflow)
+  // 2. Einzahlungen/Auszahlungen within the period
+  // 3. Current portfolio value as terminal inflow
   const periodXirr = useMemo(() => {
     if (!summary || summary.currentValue <= 0) return null
-    const firstTxDate = transactions.length > 0 ? [...transactions].sort((a, b) => a.date.localeCompare(b.date))[0].date : undefined
+    const firstTxDate = transactions.length > 0
+      ? [...transactions].sort((a, b) => a.date.localeCompare(b.date))[0].date
+      : undefined
     const { start } = getPeriodDates(period, firstTxDate)
     const startStr = start.toISOString().slice(0, 10)
 
-    const periodCashflows = cashflows.filter(cf => cf.date >= startStr)
+    const flows: { date: Date; amount: number }[] = []
 
-    // If no cashflows in period, fall back to transaction-based for the period
-    const xirrFlows = periodCashflows.length > 0
-      ? buildXIRRCashflows(
-          periodCashflows.map(cf => ({ date: cf.date, amount: Number(cf.amount), category: cf.category })),
-          summary.currentValue
-        )
-      : []
-
-    if (xirrFlows.length >= 2) {
-      const raw = calculateXIRR(xirrFlows)
-      if (raw != null) return raw * 100
+    if (period === 'alltime') {
+      // All-time: use all Einzahlungen/Auszahlungen directly
+      for (const cf of cashflows) {
+        if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
+        else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
+      }
+      // Fallback to transaction-based if no cashflow records
+      if (flows.length === 0) {
+        for (const tx of transactions) {
+          flows.push({
+            date: new Date(tx.date),
+            amount: tx.type === 'Kauf' ? -tx.amount : tx.shares * tx.price - tx.fees - tx.taxes,
+          })
+        }
+      }
+    } else {
+      // Sub-period: portfolio value at start of period is the "entry cost"
+      if (Object.keys(history).length > 0) {
+        const seriesAtStart = buildPortfolioSeries(transactions, securities, history, start, start)
+        const startValue = seriesAtStart[0]?.value ?? 0
+        if (startValue > 0) {
+          flows.push({ date: start, amount: -startValue })
+        }
+      }
+      // Add cashflows within the period
+      for (const cf of cashflows) {
+        if (cf.date < startStr) continue
+        if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
+        else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
+      }
     }
 
-    // Fallback: transaction-based for the period
-    const periodTx = transactions.filter(tx => tx.date >= startStr)
-    if (periodTx.length === 0) return null
-    const txFlows = periodTx
-      .map(tx => ({
-        date: new Date(tx.date),
-        amount: tx.type === 'Kauf' ? -tx.amount : tx.shares * tx.price - tx.fees - tx.taxes,
-      }))
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-    txFlows.push({ date: new Date(), amount: summary.currentValue })
-    if (txFlows.length < 2) return null
-    const raw = calculateXIRR(txFlows)
+    if (flows.length === 0) return null
+    flows.push({ date: new Date(), amount: summary.currentValue })
+    flows.sort((a, b) => a.date.getTime() - b.date.getTime())
+    if (flows.length < 2) return null
+
+    const raw = calculateXIRR(flows)
     return raw != null ? raw * 100 : null
-  }, [summary, cashflows, transactions, period])
+  }, [summary, cashflows, transactions, securities, history, period])
 
   const handleRefresh = () => {
     const tickers = securities.map(s => s.gf_ticker ?? s.ticker).filter(Boolean)
