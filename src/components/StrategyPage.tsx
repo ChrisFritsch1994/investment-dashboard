@@ -41,13 +41,16 @@ export default function StrategyPage({ strategy }: { strategy: Strategy }) {
 
   useEffect(() => {
     if (transactions.length > 0) {
-      setSummary(computeSummary(filteredTx, securities, cashflows, quotes))
+      // Pass ALL transactions so cross-strategy buys/sells are matched correctly.
+      // Positions are then filtered by strategy for display below.
+      setSummary(computeSummary(transactions, securities, cashflows, quotes))
     }
   }, [transactions, securities, quotes])
 
   const stratData = summary?.byStrategy[strategy]
-  const openPositions = summary?.positions.filter(p => p.shares > 0.0001) ?? []
-  const realizedPositions = summary?.positions.filter(p => p.realizedPnL !== 0) ?? []
+  // calculatePositions groups by ticker::txStrategy, so p.security.strategy = tx.strategy
+  const openPositions = summary?.positions.filter(p => p.shares > 0.0001 && p.security.strategy === strategy) ?? []
+  const realizedPositions = summary?.positions.filter(p => p.realizedPnL !== 0 && p.security.strategy === strategy) ?? []
   const pnlPct = stratData && stratData.invested > 0 ? ((stratData.value - stratData.invested) / stratData.invested) * 100 : 0
 
   const stats = filteredTx.length > 0
