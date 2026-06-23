@@ -15,6 +15,7 @@ const PERIOD_CONFIG: Record<string, { yahooRange: string; days: number }> = {
   '1y': { yahooRange: '1y', days: 365 },
   '3y': { yahooRange: '3y', days: 1095 },
   '5y': { yahooRange: '5y', days: 1825 },
+  alltime: { yahooRange: 'max', days: 3650 },
 }
 
 async function fetchYahooHistory(ticker: string, range: string): Promise<{ date: string; close: number }[] | null> {

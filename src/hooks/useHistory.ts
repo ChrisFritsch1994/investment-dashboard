@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 
-export type Period = 'ytd' | '1y' | '3y' | '5y'
+export type Period = 'ytd' | '1y' | '3y' | '5y' | 'alltime'
 export type PriceHistory = Record<string, { date: string; close: number }[]>
 
 export function useHistory() {

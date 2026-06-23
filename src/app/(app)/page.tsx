@@ -7,7 +7,7 @@ import { useQuotes } from '@/hooks/useQuotes'
 import { useHistory, type Period, type PriceHistory } from '@/hooks/useHistory'
 import { formatCurrency, formatPercent } from '@/lib/format'
 import { buildTWRRSeries, calculateTWRR, normalizeSeries, historyToSeries, downsample } from '@/lib/twrr'
-import { calculateXIRR } from '@/lib/calculations'
+import { calculateXIRR, buildXIRRCashflows } from '@/lib/calculations'
 import KpiCard from '@/components/KpiCard'
 import DonutChart from '@/components/DonutChart'
 import StrategyBarChart from '@/components/StrategyBarChart'
@@ -19,11 +19,12 @@ const PERIODS: { label: string; value: Period }[] = [
   { label: '1 Jahr', value: '1y' },
   { label: '3 Jahre', value: '3y' },
   { label: '5 Jahre', value: '5y' },
+  { label: 'Alltime', value: 'alltime' },
 ]
 
 const MSCI_TICKER = 'EUNL.DE'
 
-function getPeriodDates(period: Period): { start: Date; end: Date } {
+function getPeriodDates(period: Period, firstTxDate?: string): { start: Date; end: Date } {
   const end = new Date()
   const start = new Date()
   switch (period) {
@@ -39,6 +40,13 @@ function getPeriodDates(period: Period): { start: Date; end: Date } {
       break
     case '5y':
       start.setFullYear(start.getFullYear() - 5)
+      break
+    case 'alltime':
+      // Start from first transaction date, or 10 years ago as fallback
+      if (firstTxDate) {
+        return { start: new Date(firstTxDate), end }
+      }
+      start.setFullYear(start.getFullYear() - 10)
       break
   }
   return { start, end }
@@ -130,6 +138,43 @@ export default function DashboardPage() {
     return raw != null ? raw * 100 : null
   }, [msciFullHistory, cashflows])
 
+  // Period-specific XIRR: filter cashflows to selected period, use current portfolio value as terminal
+  const periodXirr = useMemo(() => {
+    if (!summary || summary.currentValue <= 0) return null
+    const firstTxDate = transactions.length > 0 ? [...transactions].sort((a, b) => a.date.localeCompare(b.date))[0].date : undefined
+    const { start } = getPeriodDates(period, firstTxDate)
+    const startStr = start.toISOString().slice(0, 10)
+
+    const periodCashflows = cashflows.filter(cf => cf.date >= startStr)
+
+    // If no cashflows in period, fall back to transaction-based for the period
+    const xirrFlows = periodCashflows.length > 0
+      ? buildXIRRCashflows(
+          periodCashflows.map(cf => ({ date: cf.date, amount: Number(cf.amount), category: cf.category })),
+          summary.currentValue
+        )
+      : []
+
+    if (xirrFlows.length >= 2) {
+      const raw = calculateXIRR(xirrFlows)
+      if (raw != null) return raw * 100
+    }
+
+    // Fallback: transaction-based for the period
+    const periodTx = transactions.filter(tx => tx.date >= startStr)
+    if (periodTx.length === 0) return null
+    const txFlows = periodTx
+      .map(tx => ({
+        date: new Date(tx.date),
+        amount: tx.type === 'Kauf' ? -tx.amount : tx.shares * tx.price - tx.fees - tx.taxes,
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+    txFlows.push({ date: new Date(), amount: summary.currentValue })
+    if (txFlows.length < 2) return null
+    const raw = calculateXIRR(txFlows)
+    return raw != null ? raw * 100 : null
+  }, [summary, cashflows, transactions, period])
+
   const handleRefresh = () => {
     const tickers = securities.map(s => s.gf_ticker ?? s.ticker).filter(Boolean)
     fetchQuotes(tickers)
@@ -141,7 +186,8 @@ export default function DashboardPage() {
       return { portfolioSeries: [], msciSeries: [], twrr: null }
     }
 
-    const { start, end } = getPeriodDates(period)
+    const firstTxDate = [...transactions].sort((a, b) => a.date.localeCompare(b.date))[0]?.date
+    const { start, end } = getPeriodDates(period, firstTxDate)
 
     const rawPortfolio = buildTWRRSeries(transactions, securities, history, start, end)
     const rawMsci = historyToSeries(history[MSCI_TICKER] ?? [], start, end)
@@ -316,9 +362,9 @@ export default function DashboardPage() {
           positive={s ? s.realizedPnL >= 0 : null}
         />
         <KpiCard
-          label="XIRR p.a."
-          value={s?.xirr != null ? formatPercent(s.xirr) : '—'}
-          positive={s?.xirr != null ? s.xirr >= 0 : null}
+          label={`XIRR p.a. (${periodLabel})`}
+          value={periodXirr != null ? formatPercent(periodXirr) : '—'}
+          positive={periodXirr != null ? periodXirr >= 0 : null}
           sub="Interner Zinsfuß"
         />
         <KpiCard
@@ -330,7 +376,7 @@ export default function DashboardPage() {
       </div>
 
       {/* MSCI Comparison */}
-      {(s?.xirr != null || msciXirr != null) && (
+      {(periodXirr != null || msciXirr != null) && (
         <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
             Vergleich: Mein Portfolio vs. MSCI World ETF
@@ -341,8 +387,8 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="rounded-lg p-4" style={{ background: '#0d1117', border: '1px solid var(--border)' }}>
               <div className="text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Mein Portfolio (XIRR p.a.)</div>
-              <div className="text-3xl font-bold" style={{ color: s?.xirr != null && s.xirr >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                {s?.xirr != null ? formatPercent(s.xirr) : '—'}
+              <div className="text-3xl font-bold" style={{ color: periodXirr != null && periodXirr >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                {periodXirr != null ? formatPercent(periodXirr) : '—'}
               </div>
             </div>
             <div className="rounded-lg p-4" style={{ background: '#0d1117', border: '1px solid var(--border)' }}>
@@ -352,15 +398,15 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-          {s?.xirr != null && msciXirr != null && (
+          {periodXirr != null && msciXirr != null && (
             <div className="mt-3 rounded-lg px-4 py-3 text-sm" style={{
-              background: s.xirr >= msciXirr ? 'rgba(132,204,22,0.08)' : 'rgba(239,68,68,0.08)',
-              border: `1px solid ${s.xirr >= msciXirr ? 'rgba(132,204,22,0.2)' : 'rgba(239,68,68,0.2)'}`,
+              background: periodXirr >= msciXirr ? 'rgba(132,204,22,0.08)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${periodXirr >= msciXirr ? 'rgba(132,204,22,0.2)' : 'rgba(239,68,68,0.2)'}`,
             }}>
               <span style={{ color: 'var(--text-secondary)' }}>
-                {s.xirr >= msciXirr
-                  ? `✓ Du schlägst den MSCI World um ${formatPercent(s.xirr - msciXirr)} p.a.`
-                  : `✗ Der MSCI World schlägt dich um ${formatPercent(msciXirr - s.xirr)} p.a. — eine reine ETF-Strategie wäre bisher besser gewesen.`}
+                {periodXirr >= msciXirr
+                  ? `✓ Du schlägst den MSCI World um ${formatPercent(periodXirr - msciXirr)} p.a.`
+                  : `✗ Der MSCI World schlägt dich um ${formatPercent(msciXirr - periodXirr)} p.a. — eine reine ETF-Strategie wäre bisher besser gewesen.`}
               </span>
             </div>
           )}

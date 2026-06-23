@@ -128,6 +128,8 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
     }
   }
 
+  const currencySymbol = form.currency === 'USD' ? '$' : form.currency === 'GBP' ? '£' : '€'
+
   const inputClass = "w-full px-3 py-2 rounded-lg text-sm outline-none"
   const inputStyle = {
     background: '#0d1117',
@@ -242,7 +244,7 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
                 value={form.shares} onChange={e => set('shares', e.target.value)} placeholder="0.00" />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Preis (€)</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Preis ({currencySymbol})</label>
               <input type="number" required step="any" min="0" className={inputClass} style={inputStyle}
                 value={form.price} onChange={e => set('price', e.target.value)} placeholder="0.00" />
             </div>
@@ -262,7 +264,7 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                Limit (Kursziel) €
+                Limit (Kursziel) {currencySymbol}
               </label>
               <input type="number" step="any" min="0" className={inputClass} style={inputStyle}
                 value={form.limit_price} onChange={e => set('limit_price', e.target.value)}
@@ -270,7 +272,7 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                Stop-Limit (Stop-Loss) €
+                Stop-Limit (Stop-Loss) {currencySymbol}
               </label>
               <input type="number" step="any" min="0" className={inputClass} style={inputStyle}
                 value={form.stop_limit_price} onChange={e => set('stop_limit_price', e.target.value)}
@@ -284,7 +286,7 @@ export default function TransactionForm({ securities, onClose, onSaved, transact
           >
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Berechneter Betrag</span>
             <span className="text-sm font-bold" style={{ color: 'var(--accent-green)' }}>
-              {new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount)}
+              {new Intl.NumberFormat('de-DE', { style: 'currency', currency: form.currency || 'EUR' }).format(amount)}
             </span>
           </div>
 
