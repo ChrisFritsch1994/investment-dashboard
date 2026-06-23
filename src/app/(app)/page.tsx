@@ -138,12 +138,9 @@ export default function DashboardPage() {
     return raw != null ? raw * 100 : null
   }, [msciFullHistory, cashflows])
 
-  // Period-specific XIRR using correct methodology:
-  // 1. Portfolio value at period start as opening cost (negative cashflow)
-  // 2. Einzahlungen/Auszahlungen within the period
-  // 3. Current portfolio value as terminal inflow
   const periodXirr = useMemo(() => {
     if (!summary || summary.currentValue <= 0) return null
+
     const firstTxDate = transactions.length > 0
       ? [...transactions].sort((a, b) => a.date.localeCompare(b.date))[0].date
       : undefined
@@ -153,34 +150,42 @@ export default function DashboardPage() {
     const flows: { date: Date; amount: number }[] = []
 
     if (period === 'alltime') {
-      // All-time: use all Einzahlungen/Auszahlungen directly
+      // Alltime: all Einzahlungen/Auszahlungen as signed flows
       for (const cf of cashflows) {
         if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
         else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
       }
-      // Fallback to transaction-based if no cashflow records
+      // No cashflow records → use only Kauf as outflows (single sign-change, no spurious roots)
       if (flows.length === 0) {
-        for (const tx of transactions) {
-          flows.push({
-            date: new Date(tx.date),
-            amount: tx.type === 'Kauf' ? -tx.amount : tx.shares * tx.price - tx.fees - tx.taxes,
-          })
+        for (const tx of transactions.filter(t => t.type === 'Kauf')) {
+          flows.push({ date: new Date(tx.date), amount: -tx.amount })
         }
       }
     } else {
-      // Sub-period: portfolio value at start of period is the "entry cost"
+      // Sub-period: use portfolio value at the day BEFORE period start as opening
+      // (avoids double-counting transactions that fall on exactly the start date)
+      const dayBefore = new Date(start.getTime() - 24 * 3600 * 1000)
       if (Object.keys(history).length > 0) {
-        const seriesAtStart = buildPortfolioSeries(transactions, securities, history, start, start)
-        const startValue = seriesAtStart[0]?.value ?? 0
+        // Look up to 7 days back to handle weekends/holidays
+        const lookbackStart = new Date(dayBefore.getTime() - 6 * 24 * 3600 * 1000)
+        const series = buildPortfolioSeries(transactions, securities, history, lookbackStart, dayBefore)
+        const startValue = series.length > 0 ? series[series.length - 1].value : 0
         if (startValue > 0) {
           flows.push({ date: start, amount: -startValue })
         }
       }
-      // Add cashflows within the period
+      // Einzahlungen/Auszahlungen strictly within the period
       for (const cf of cashflows) {
         if (cf.date < startStr) continue
         if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
         else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
+      }
+      // No opening value and no cashflows → fall back to alltime
+      if (flows.length === 0) {
+        for (const cf of cashflows) {
+          if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
+          else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
+        }
       }
     }
 
@@ -190,7 +195,15 @@ export default function DashboardPage() {
     if (flows.length < 2) return null
 
     const raw = calculateXIRR(flows)
-    return raw != null ? raw * 100 : null
+    if (raw == null) return null
+
+    // Sanity check: if net position is positive but solver returned negative rate,
+    // the solver found a spurious root — return null rather than misleading value
+    const totalOutflows = flows.filter(f => f.amount < 0).reduce((s, f) => s + Math.abs(f.amount), 0)
+    const totalInflows = flows.filter(f => f.amount > 0).reduce((s, f) => s + f.amount, 0)
+    if (raw < 0 && totalInflows > totalOutflows) return null
+
+    return raw * 100
   }, [summary, cashflows, transactions, securities, history, period])
 
   const handleRefresh = () => {
