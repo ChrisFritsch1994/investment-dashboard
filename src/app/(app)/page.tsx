@@ -145,47 +145,42 @@ export default function DashboardPage() {
       ? [...transactions].sort((a, b) => a.date.localeCompare(b.date))[0].date
       : undefined
     const { start } = getPeriodDates(period, firstTxDate)
-    const startStr = start.toISOString().slice(0, 10)
 
     const flows: { date: Date; amount: number }[] = []
 
     if (period === 'alltime') {
-      // Alltime: all Einzahlungen/Auszahlungen as signed flows
+      // All Einzahlungen/Auszahlungen — single sign change, no spurious roots
       for (const cf of cashflows) {
         if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
         else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
       }
-      // No cashflow records → use only Kauf as outflows (single sign-change, no spurious roots)
+      // No cashflow records → only Kauf as outflows (keeps single sign change)
       if (flows.length === 0) {
         for (const tx of transactions.filter(t => t.type === 'Kauf')) {
           flows.push({ date: new Date(tx.date), amount: -tx.amount })
         }
       }
     } else {
-      // Sub-period: use portfolio value at the day BEFORE period start as opening
-      // (avoids double-counting transactions that fall on exactly the start date)
-      const dayBefore = new Date(start.getTime() - 24 * 3600 * 1000)
-      if (Object.keys(history).length > 0) {
-        // Look up to 7 days back to handle weekends/holidays
-        const lookbackStart = new Date(dayBefore.getTime() - 6 * 24 * 3600 * 1000)
-        const series = buildPortfolioSeries(transactions, securities, history, lookbackStart, dayBefore)
-        const startValue = series.length > 0 ? series[series.length - 1].value : 0
-        if (startValue > 0) {
-          flows.push({ date: start, amount: -startValue })
-        }
-      }
-      // Einzahlungen/Auszahlungen strictly within the period
+      // Sub-period: find portfolio value at the FIRST available date at/after period start
+      // within the loaded history (avoids the out-of-range issue with dayBefore).
+      // That date becomes the "opening entry cost"; cashflows strictly AFTER it are added.
+      if (Object.keys(history).length === 0) return null
+
+      const lookAheadEnd = new Date(start.getTime() + 7 * 24 * 3600 * 1000)
+      const series = buildPortfolioSeries(transactions, securities, history, start, lookAheadEnd)
+      const startEntry = series[0]
+
+      if (!startEntry) return null // no priceable holdings in this period
+
+      const openingDateStr = startEntry.date
+      flows.push({ date: new Date(openingDateStr), amount: -startEntry.value })
+
+      // Cashflows strictly AFTER the opening date (that date's value already captures them)
       for (const cf of cashflows) {
-        if (cf.date < startStr) continue
-        if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
-        else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
-      }
-      // No opening value and no cashflows → fall back to alltime
-      if (flows.length === 0) {
-        for (const cf of cashflows) {
-          if (cf.category === 'Einzahlung') flows.push({ date: new Date(cf.date), amount: -Math.abs(Number(cf.amount)) })
-          else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cf.date), amount: Math.abs(Number(cf.amount)) })
-        }
+        const cfDate = cf.date.slice(0, 10)
+        if (cfDate <= openingDateStr) continue
+        if (cf.category === 'Einzahlung') flows.push({ date: new Date(cfDate), amount: -Math.abs(Number(cf.amount)) })
+        else if (cf.category === 'Auszahlung') flows.push({ date: new Date(cfDate), amount: Math.abs(Number(cf.amount)) })
       }
     }
 
@@ -194,13 +189,12 @@ export default function DashboardPage() {
     flows.sort((a, b) => a.date.getTime() - b.date.getTime())
     if (flows.length < 2) return null
 
+    const totalOutflows = flows.filter(f => f.amount < 0).reduce((s, f) => s + Math.abs(f.amount), 0)
+    const totalInflows  = flows.filter(f => f.amount > 0).reduce((s, f) => s + f.amount, 0)
+
     const raw = calculateXIRR(flows)
     if (raw == null) return null
-
-    // Sanity check: if net position is positive but solver returned negative rate,
-    // the solver found a spurious root — return null rather than misleading value
-    const totalOutflows = flows.filter(f => f.amount < 0).reduce((s, f) => s + Math.abs(f.amount), 0)
-    const totalInflows = flows.filter(f => f.amount > 0).reduce((s, f) => s + f.amount, 0)
+    // Reject spurious negative root when portfolio is net positive
     if (raw < 0 && totalInflows > totalOutflows) return null
 
     return raw * 100

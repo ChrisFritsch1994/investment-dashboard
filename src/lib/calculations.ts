@@ -153,11 +153,18 @@ export function calculateXIRR(
     return null
   }
 
-  // Try multiple starting guesses
-  for (const guess of [0.1, 0.5, -0.1, 0.01, 2.0, -0.5]) {
+  const totalOut = cashflows.filter(cf => cf.amount < 0).reduce((s, cf) => s + Math.abs(cf.amount), 0)
+  const totalIn  = cashflows.filter(cf => cf.amount > 0).reduce((s, cf) => s + cf.amount, 0)
+  const netPositive = totalIn > totalOut
+
+  // Try positive guesses first when portfolio is net positive to avoid spurious negative roots
+  const guesses = netPositive
+    ? [0.1, 0.5, 0.01, 2.0, -0.1, -0.5]
+    : [0.1, 0.5, -0.1, 0.01, 2.0, -0.5]
+
+  for (const guess of guesses) {
     const result = newtonSolve(guess)
     if (result !== null && result > -1 && isFinite(result)) {
-      // Verify convergence: NPV should be near zero
       if (Math.abs(npv(result)) < 1.0) return result
     }
   }
